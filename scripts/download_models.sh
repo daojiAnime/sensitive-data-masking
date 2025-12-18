@@ -71,6 +71,7 @@ download_model() {
 
             python -c \"
 import os
+import json
 os.environ['PPNLP_HOME'] = '/app/models'
 
 print('PPNLP_HOME:', os.environ['PPNLP_HOME'])
@@ -98,6 +99,22 @@ else:
     else:
         print('static 目录不存在')
     exit(1)
+
+# 创建 config.json (修复 PaddleNLP 2.8.x 兼容性问题)
+config_path = '/app/models/taskflow/lac/config.json'
+if not os.path.exists(config_path):
+    print('创建 LAC 模型配置文件 config.json...')
+    lac_config = {
+        'model_type': 'lac',
+        'emb_dim': 128,
+        'hidden_size': 128,
+        'vocab_size': 668845
+    }
+    with open(config_path, 'w', encoding='utf-8') as f:
+        json.dump(lac_config, f, indent=2, ensure_ascii=False)
+    print(f'✓ config.json 已创建')
+else:
+    print(f'✓ config.json 已存在')
 
 print('测试推理...')
 from paddlenlp import Taskflow

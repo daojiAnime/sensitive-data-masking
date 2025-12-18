@@ -33,6 +33,37 @@ def setup_model_dir(model_dir: str | None) -> Path:
     return default_dir
 
 
+def _create_lac_config(model_dir: Path) -> None:
+    """
+    创建 LAC 模型的 config.json 配置文件
+
+    修复 PaddleNLP 2.8.x 版本兼容性问题：
+    - 新版本代码需要从 config.json 读取 emb_dim, hidden_size 等参数
+    - 但官方模型包未包含此文件，导致 KeyError: 'emb_dim'
+    """
+    import json
+
+    config_path = model_dir / "taskflow" / "lac" / "config.json"
+    if config_path.exists():
+        return
+
+    # 确保目录存在
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # LAC 模型默认配置参数
+    lac_config = {
+        "model_type": "lac",
+        "emb_dim": 128,
+        "hidden_size": 128,
+        "vocab_size": 668845,
+    }
+
+    with open(config_path, "w", encoding="utf-8") as f:
+        json.dump(lac_config, f, indent=2, ensure_ascii=False)
+
+    print(f"  ✓ 已创建 LAC config.json: {config_path}")
+
+
 def download_ner_model(mode: str = "fast") -> bool:
     """
     下载 NER 模型
@@ -87,6 +118,10 @@ def download_ner_model(mode: str = "fast") -> bool:
         else:
             print("  正在下载模型...")
             ner = Taskflow("ner", mode=mode)
+
+        # 创建 LAC config.json (修复 PaddleNLP 2.8.x 兼容性问题)
+        model_dir = Path(os.environ.get("PPNLP_HOME", Path.home() / ".paddlenlp"))
+        _create_lac_config(model_dir)
 
         # 测试模型
         test_result = ner("测试文本")
