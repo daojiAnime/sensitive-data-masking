@@ -53,7 +53,11 @@ download_model() {
             echo '安装 PaddlePaddle 和 PaddleNLP...'
             pip install --no-cache-dir -q 'setuptools>=75.0.0' paddlepaddle 'aistudio_sdk==0.2.1' 'paddlenlp==2.8.1'
 
-            echo '检查目录权限...'
+            echo '清理不完整的模型缓存...'
+            rm -rf /app/models/taskflow/lac
+            rm -rf /app/models/taskflow/wordtag
+
+            echo '检查目录状态...'
             ls -la /app/models/
             df -h /app/models/
 
@@ -63,16 +67,15 @@ os.environ['PPNLP_HOME'] = '/app/models'
 print(f'PPNLP_HOME: {os.environ.get(\\\"PPNLP_HOME\\\")}')
 
 from paddlenlp import Taskflow
-print('初始化 NER (${ner_mode})...')
+print('初始化 NER (${ner_mode})，开始下载模型...')
 ner = Taskflow('ner', mode='${ner_mode}')
 result = ner('测试文本')
 print(f'测试结果: {result}')
 print('✓ ${ner_mode} 模型下载完成')
-
-# 验证模型文件
-import subprocess
-subprocess.run(['ls', '-la', '/app/models/taskflow/'], check=False)
 \"
+
+            echo '验证模型文件...'
+            ls -la /app/models/taskflow/lac/static/ || echo '模型目录不存在'
         "
 }
 
