@@ -1,0 +1,57 @@
+[project]
+name = "sensitive-data-masking"
+version = "0.1.0"
+description = "基于 NLP 的中文敏感信息识别与脱敏工具"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "rich>=14.0.0",
+    "gradio>=6.1.0",
+]
+
+
+[dependency-groups]
+# PaddleNLP 依赖 (通过 uv sync --group paddle 安装)
+# ⚠️ Mac Apple Silicon 推荐使用 conda 安装: conda install paddlepaddle paddlenlp -c paddle
+paddle = [
+    "paddlepaddle>=2.6.0",
+    "paddlenlp>=2.8.0",
+]
+
+dev = [
+    "mypy>=1.15.0",
+    "ruff>=0.9.7",
+    "pytest>=8.3.4",
+    "ipykernel>=6.29.5",
+]
+
+[tool.uv]
+package = false
+
+[tool.mypy]
+strict = true
+exclude = ["venv", ".venv"]
+
+[[tool.mypy.overrides]]
+module = ["paddlenlp.*", "paddle.*"]
+ignore_missing_imports = true
+
+[tool.ruff]
+target-version = "py312"
+line-length = 120
+
+[tool.ruff.lint]
+select = [
+    "E",      # pycodestyle errors
+    "W",      # pycodestyle warnings
+    "F",      # pyflakes
+    "I",      # isort
+    "B",      # flake8-bugbear
+    "C4",     # flake8-comprehensions
+    "UP",     # pyupgrade
+    "ARG001", # unused arguments in functions
+]
+ignore = [
+    "E501", # line too long
+    "B008", # do not perform function calls in argument defaults
+]
