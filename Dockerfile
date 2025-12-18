@@ -8,14 +8,9 @@
 # ============================================
 # Stage 1: Builder (强制 amd64 架构)
 # ============================================
-FROM --platform=linux/amd64 python:3.12-slim AS builder
+FROM --platform=linux/amd64 python:3.10-slim AS builder
 
 WORKDIR /app
-
-# 安装编译依赖 (cmake 用于编译 onnxoptimizer)
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends cmake build-essential && \
-    apt-get clean && rm -rf /var/lib/apt/lists/*
 
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
@@ -30,7 +25,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 # ============================================
 # Stage 2: Runtime (强制 amd64 架构)
 # ============================================
-FROM --platform=linux/amd64 python:3.12-slim AS runtime
+FROM --platform=linux/amd64 python:3.10-slim AS runtime
 
 LABEL maintainer="daoji"
 LABEL description="Sensitive Data Masking - 基于 NLP 的中文敏感信息识别与脱敏工具"

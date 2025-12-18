@@ -3,7 +3,7 @@ name = "sensitive-data-masking"
 version = "0.1.0"
 description = "基于 NLP 的中文敏感信息识别与脱敏工具"
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.10"
 dependencies = [
     "rich>=14.0.0",
     "gradio>=6.1.0",
@@ -27,6 +27,7 @@ dev = [
 
 [tool.uv]
 package = false
+
 
 [tool.mypy]
 strict = true
