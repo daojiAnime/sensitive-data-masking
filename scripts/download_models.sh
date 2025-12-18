@@ -33,82 +33,48 @@ echo -e "${GREEN}▸${NC} 模式: ${MODE}"
 echo -e "${GREEN}▸${NC} 保存目录: ${MODEL_DIR}"
 echo
 
+check_memory() {
+    # 检查可用内存（需要至少 4G）
+    local available_mb
+    available_mb=$(free -m | awk '/^Mem:/{print $7}')
+
+    if [ "$available_mb" -lt 4096 ]; then
+        echo -e "${YELLOW}⚠ 警告: 可用内存 ${available_mb}MB < 4096MB${NC}"
+        echo -e "${YELLOW}  PaddlePaddle 模型转换需要较大内存，可能会失败${NC}"
+        echo -e "${YELLOW}  建议: 添加 swap 空间 (sudo fallocate -l 4G /swapfile && sudo mkswap /swapfile && sudo swapon /swapfile)${NC}"
+        echo
+    fi
+}
+
 download_model() {
     local ner_mode=$1
     echo -e "${YELLOW}▸ 下载 ${ner_mode} 模式模型...${NC}"
 
-    # 使用 Python 3.10 slim 镜像 + 编译工具
-    # PaddlePaddle 对 Python 3.10 支持最完善
     docker run --rm \
         -v "${MODEL_DIR}:/app/models" \
         -e PPNLP_HOME=/app/models \
-        -e HF_ENDPOINT=https://hf-mirror.com \
         python:3.10-slim \
         bash -c "
             set -e
-            echo '安装编译依赖...'
-            apt-get update -qq && apt-get install -qq -y --no-install-recommends \
-                cmake build-essential > /dev/null 2>&1
-
-            echo '安装 PaddlePaddle 和 PaddleNLP...'
+            apt-get update -qq && apt-get install -qq -y --no-install-recommends cmake build-essential > /dev/null 2>&1
             pip install --no-cache-dir -q 'setuptools>=75.0.0' paddlepaddle 'aistudio_sdk==0.2.1' 'paddlenlp==2.8.1'
 
-            echo '清理不完整的模型缓存...'
-            rm -rf /app/models/taskflow/lac
-            rm -rf /app/models/taskflow/wordtag
+            # 清理不完整的缓存
+            rm -rf /app/models/taskflow/lac /app/models/taskflow/wordtag
 
-            echo '检查目录状态...'
-            ls -la /app/models/
-            df -h /app/models/
-
-            python << PYEOF
+            python -c \"
 import os
-import sys
-
 os.environ['PPNLP_HOME'] = '/app/models'
-print(f'PPNLP_HOME: {os.environ["PPNLP_HOME"]}')
-
-# 先下载模型，不加载推理引擎
-from paddlenlp.taskflow.lexical_analysis import LacTask
-
-print('下载 LAC 模型...')
-task = LacTask(task='ner', model='lac', mode='${ner_mode}', lazy_load=True)
-
-# 检查文件
-model_dir = '/app/models/taskflow/lac/static'
-print(f'\\n检查模型目录: {model_dir}')
-if os.path.exists(model_dir):
-    for f in os.listdir(model_dir):
-        fpath = os.path.join(model_dir, f)
-        size = os.path.getsize(fpath) if os.path.isfile(fpath) else 0
-        print(f'  {f}: {size} bytes')
-else:
-    print('  目录不存在!')
-    sys.exit(1)
-
-# 验证关键文件
-pdmodel = os.path.join(model_dir, 'inference.pdmodel')
-pdiparams = os.path.join(model_dir, 'inference.pdiparams')
-
-if not os.path.exists(pdmodel):
-    print(f'\\n错误: {pdmodel} 不存在!')
-    sys.exit(1)
-if not os.path.exists(pdiparams):
-    print(f'\\n错误: {pdiparams} 不存在!')
-    sys.exit(1)
-
-print('\\n✓ 模型文件验证通过')
-
-# 现在测试推理
-print('\\n测试推理...')
 from paddlenlp import Taskflow
+print('初始化 NER (${ner_mode})...')
 ner = Taskflow('ner', mode='${ner_mode}')
-result = ner('测试文本')
-print(f'测试结果: {result}')
+print(ner('测试文本'))
 print('✓ ${ner_mode} 模型下载完成')
-PYEOF
+\"
         "
 }
+
+check_memory
 
 case "$MODE" in
     fast)
