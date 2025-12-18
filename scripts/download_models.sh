@@ -61,21 +61,52 @@ download_model() {
             ls -la /app/models/
             df -h /app/models/
 
-            python -c \"
+            python << PYEOF
 import os
-os.environ['PPNLP_HOME'] = '/app/models'
-print(f'PPNLP_HOME: {os.environ.get(\\\"PPNLP_HOME\\\")}')
+import sys
 
+os.environ['PPNLP_HOME'] = '/app/models'
+print(f'PPNLP_HOME: {os.environ["PPNLP_HOME"]}')
+
+# 先下载模型，不加载推理引擎
+from paddlenlp.taskflow.lexical_analysis import LacTask
+
+print('下载 LAC 模型...')
+task = LacTask(task='ner', model='lac', mode='${ner_mode}', lazy_load=True)
+
+# 检查文件
+model_dir = '/app/models/taskflow/lac/static'
+print(f'\\n检查模型目录: {model_dir}')
+if os.path.exists(model_dir):
+    for f in os.listdir(model_dir):
+        fpath = os.path.join(model_dir, f)
+        size = os.path.getsize(fpath) if os.path.isfile(fpath) else 0
+        print(f'  {f}: {size} bytes')
+else:
+    print('  目录不存在!')
+    sys.exit(1)
+
+# 验证关键文件
+pdmodel = os.path.join(model_dir, 'inference.pdmodel')
+pdiparams = os.path.join(model_dir, 'inference.pdiparams')
+
+if not os.path.exists(pdmodel):
+    print(f'\\n错误: {pdmodel} 不存在!')
+    sys.exit(1)
+if not os.path.exists(pdiparams):
+    print(f'\\n错误: {pdiparams} 不存在!')
+    sys.exit(1)
+
+print('\\n✓ 模型文件验证通过')
+
+# 现在测试推理
+print('\\n测试推理...')
 from paddlenlp import Taskflow
-print('初始化 NER (${ner_mode})，开始下载模型...')
 ner = Taskflow('ner', mode='${ner_mode}')
 result = ner('测试文本')
 print(f'测试结果: {result}')
 print('✓ ${ner_mode} 模型下载完成')
-\"
-
-            echo '验证模型文件...'
-            ls -la /app/models/taskflow/lac/static/ || echo '模型目录不存在'
+PYEOF
         "
 }
 
