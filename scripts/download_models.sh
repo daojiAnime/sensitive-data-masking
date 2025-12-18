@@ -51,6 +51,8 @@ download_model() {
     echo -e "${YELLOW}▸ 下载 ${ner_mode} 模式模型...${NC}"
 
     docker run --rm \
+        --memory=4g \
+        --memory-swap=8g \
         -v "${MODEL_DIR}:/app/models" \
         -e PPNLP_HOME=/app/models \
         python:3.10-slim \
@@ -64,13 +66,22 @@ download_model() {
 
             python -c \"
 import os
+import subprocess
 os.environ['PPNLP_HOME'] = '/app/models'
-from paddlenlp import Taskflow
+
+print('PPNLP_HOME:', os.environ['PPNLP_HOME'])
 print('初始化 NER (${ner_mode})...')
+
+from paddlenlp import Taskflow
 ner = Taskflow('ner', mode='${ner_mode}')
 print(ner('测试文本'))
 print('✓ ${ner_mode} 模型下载完成')
 \"
+            # 强制同步文件系统
+            sync
+
+            echo '验证模型文件:'
+            ls -la /app/models/taskflow/lac/static/ 2>/dev/null || echo '模型目录不存在!'
         "
 }
 
