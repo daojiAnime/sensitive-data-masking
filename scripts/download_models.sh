@@ -42,6 +42,7 @@ download_model() {
     docker run --rm \
         -v "${MODEL_DIR}:/app/models" \
         -e PPNLP_HOME=/app/models \
+        -e HF_ENDPOINT=https://hf-mirror.com \
         python:3.10-slim \
         bash -c "
             set -e
@@ -50,17 +51,27 @@ download_model() {
                 cmake build-essential > /dev/null 2>&1
 
             echo '安装 PaddlePaddle 和 PaddleNLP...'
-            # 先安装兼容版本的 aistudio_sdk，再安装 paddlenlp
-            pip install --no-cache-dir -q setuptools>=75.0.0 paddlepaddle 'aistudio_sdk==0.2.1' 'paddlenlp==2.8.1'
+            pip install --no-cache-dir -q 'setuptools>=75.0.0' paddlepaddle 'aistudio_sdk==0.2.1' 'paddlenlp==2.8.1'
+
+            echo '检查目录权限...'
+            ls -la /app/models/
+            df -h /app/models/
 
             python -c \"
+import os
+os.environ['PPNLP_HOME'] = '/app/models'
+print(f'PPNLP_HOME: {os.environ.get(\\\"PPNLP_HOME\\\")}')
+
 from paddlenlp import Taskflow
-import warnings
-warnings.filterwarnings('ignore')
 print('初始化 NER (${ner_mode})...')
 ner = Taskflow('ner', mode='${ner_mode}')
 result = ner('测试文本')
+print(f'测试结果: {result}')
 print('✓ ${ner_mode} 模型下载完成')
+
+# 验证模型文件
+import subprocess
+subprocess.run(['ls', '-la', '/app/models/taskflow/'], check=False)
 \"
         "
 }
