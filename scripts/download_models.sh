@@ -51,7 +51,7 @@ download_model() {
 
             echo '安装 PaddlePaddle 和 PaddleNLP...'
             # 先安装兼容版本的 aistudio_sdk，再安装 paddlenlp
-            pip install --no-cache-dir -q paddlepaddle 'aistudio_sdk==0.2.1' 'paddlenlp==2.8.1'
+            pip install --no-cache-dir -q setuptools>=75.0.0 paddlepaddle 'aistudio_sdk==0.2.1' 'paddlenlp==2.8.1'
 
             python -c \"
 from paddlenlp import Taskflow

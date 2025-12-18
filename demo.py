@@ -1,18 +1,12 @@
 """
 数据脱敏 Demo - 基于 NLP 的中文敏感信息识别与脱敏
 
-支持两种实现方式：
-1. NLP: 专业的中文 NER，支持最全面的中文实体标签 (推荐)
-2. 正则表达式: 用于识别结构化敏感信息 (手机号、身份证等)
+支持两种实现方式:
+1. NLP: 专业的中文 NER (推荐)
+2. 正则表达式: 用于识别结构化敏感信息
 
-使用说明：
-- NLP 安装:
-  pip install paddlepaddle NLP
-  或使用 uv: uv sync --group paddle
-
-环境变量：
-- PPNLP_HOME: PaddleNLP 模型缓存目录 (默认: ~/.paddlenlp)
-- MODEL_DIR: 模型目录别名，会自动设置 PPNLP_HOME
+安装: uv sync --group paddle
+环境变量: PPNLP_HOME 或 MODEL_DIR 设置模型缓存目录
 """
 
 from __future__ import annotations
@@ -24,35 +18,11 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from rich.console import Console
 from rich.table import Table
 
-# 可选依赖：paddlenlp（延迟导入以支持仅使用正则脱敏的场景）
-if TYPE_CHECKING:
-    from paddlenlp import Taskflow as TaskflowType
-
-_taskflow_cls: type[TaskflowType] | None = None
-
-
-def _get_taskflow() -> type[TaskflowType]:
-    """获取 Taskflow 类，延迟导入 paddlenlp"""
-    global _taskflow_cls  # noqa: PLW0603
-    if _taskflow_cls is None:
-        try:
-            from paddlenlp import Taskflow
-
-            _taskflow_cls = Taskflow
-        except ImportError as e:
-            msg = "请先安装 paddlepaddle 和 paddlenlp: pip install paddlepaddle paddlenlp"
-            raise ImportError(msg) from e
-    return _taskflow_cls
-
-# =========================
-# 配置
-# =========================
-# NER 模式: fast (默认, 快速) 或 accurate (精确, 更大模型)
 NER_MODE = os.environ.get("NER_MODE", "fast")
 
 
@@ -121,13 +91,6 @@ class BaseDesensitizer(ABC):
         strategy: MaskStrategy = MaskStrategy.PARTIAL,
         entity_types: list[EntityType] | None = None,
     ) -> None:
-        """
-        初始化脱敏器
-
-        Args:
-            strategy: 脱敏策略
-            entity_types: 要识别的实体类型列表，None 表示识别所有类型
-        """
         self.strategy = strategy
         self.entity_types = entity_types
         self._console = Console()
@@ -189,7 +152,7 @@ class BaseDesensitizer(ABC):
 
 
 class RegexDesensitizer(BaseDesensitizer):
-    """基于正则表达式的脱敏器 - 用于识别结构化敏感信息"""
+    """基于正则表达式的脱敏器"""
 
     PATTERNS: dict[EntityType, str] = {
         EntityType.PHONE: r"1[3-9]\d{9}",
@@ -203,7 +166,6 @@ class RegexDesensitizer(BaseDesensitizer):
         entities: list[Entity] = []
 
         for entity_type, pattern in self.PATTERNS.items():
-            # 如果指定了实体类型列表，跳过不在列表中的类型
             if self.entity_types is not None and entity_type not in self.entity_types:
                 continue
 
@@ -222,28 +184,17 @@ class RegexDesensitizer(BaseDesensitizer):
 
 
 class NLPDesensitizer(BaseDesensitizer):
-    """
-    基于 NLP Taskflow 的脱敏器
+    """基于 PaddleNLP Taskflow 的脱敏器"""
 
-    使用 NLP 的命名实体识别功能，支持识别：
-    - 人名 (PER)
-    - 地名 (LOC)
-    - 组织机构名 (ORG)
-    - 时间 (TIME)
-    """
-
-    # NLP NER 标签到 EntityType 的映射（仅包含敏感实体类型）
     TAG_MAPPING: dict[str, EntityType] = {
         "PER": EntityType.PERSON,
         "LOC": EntityType.LOCATION,
         "ORG": EntityType.ORGANIZATION,
         "TIME": EntityType.TIME,
-        # 中文标签映射 (accurate 模式)
         "人物类_实体": EntityType.PERSON,
         "地点类_实体": EntityType.LOCATION,
         "组织机构类_实体": EntityType.ORGANIZATION,
         "时间类_实体": EntityType.TIME,
-        # 注意：不映射 "物体类_实体" 等非敏感类型，这些会被跳过
     }
 
     def __init__(
@@ -252,40 +203,34 @@ class NLPDesensitizer(BaseDesensitizer):
         entity_types: list[EntityType] | None = None,
         mode: str | None = None,
     ) -> None:
-        """
-        初始化 NLP 脱敏器
-
-        Args:
-            strategy: 脱敏策略
-            entity_types: 要识别的实体类型列表，None 表示识别所有类型
-            mode: NER 模式，'fast' 或 'accurate'，默认从环境变量 NER_MODE 读取
-        """
         super().__init__(strategy, entity_types)
         self._mode = mode or NER_MODE
-        self._ner: Any = None
+        self._ner = self._init_ner()
 
-    def _init_ner(self) -> None:
-        """延迟初始化 NER 模型"""
-        if self._ner is None:
-            taskflow_cls = _get_taskflow()
-            self._ner = taskflow_cls("ner", mode=self._mode)
+    def _init_ner(self) -> Any:
+        """初始化 NER 模型，失败时抛出详细异常"""
+        try:
+            from paddlenlp import Taskflow
+        except ImportError as e:
+            msg = "请先安装 paddlepaddle 和 paddlenlp: uv sync --group paddle"
+            raise ImportError(msg) from e
+
+        try:
+            return Taskflow("ner", mode=self._mode)
+        except (FileNotFoundError, RuntimeError) as e:
+            msg = f"模型文件未找到，请运行 scripts/download_models.sh 下载模型: {e}"
+            raise RuntimeError(msg) from e
+        except OSError as e:
+            msg = f"模型加载失败，请检查 PPNLP_HOME 目录或网络连接: {e}"
+            raise RuntimeError(msg) from e
 
     def recognize_entities(self, text: str) -> list[Entity]:
-        """使用 NLP Taskflow 识别命名实体"""
-        self._init_ner()
-
-        if self._ner is None:
-            return []
-
-        # NLP NER 返回格式: [('text', 'tag'), ...]
+        """使用 PaddleNLP Taskflow 识别命名实体"""
         results = self._ner(text)
         entities: list[Entity] = []
-
-        # 跟踪当前位置
         current_pos = 0
-        for item in results:
-            entity_text, tag = item
-            # 查找实体在文本中的位置
+
+        for entity_text, tag in results:
             start = text.find(entity_text, current_pos)
             if start == -1:
                 continue
@@ -293,12 +238,10 @@ class NLPDesensitizer(BaseDesensitizer):
             end = start + len(entity_text)
             current_pos = end
 
-            # 映射标签到实体类型，跳过 OTHER 类型
             entity_type = self.TAG_MAPPING.get(tag)
             if entity_type is None:
-                continue  # 跳过未知标签（不脱敏非敏感实体）
+                continue
 
-            # 如果指定了实体类型列表，跳过不在列表中的类型
             if self.entity_types is not None and entity_type not in self.entity_types:
                 continue
 
@@ -308,7 +251,7 @@ class NLPDesensitizer(BaseDesensitizer):
                     entity_type=entity_type,
                     start=start,
                     end=end,
-                    confidence=0.95,  # NLP 不返回置信度，使用默认值
+                    confidence=0.95,
                 )
             )
 
@@ -316,11 +259,7 @@ class NLPDesensitizer(BaseDesensitizer):
 
 
 class CompositeDesensitizer(BaseDesensitizer):
-    """
-    组合脱敏器 - 结合正则表达式和 NLP 的能力
-
-    先使用正则匹配结构化敏感信息，再使用 NLP 识别非结构化敏感信息
-    """
+    """组合脱敏器 - 结合正则表达式和 NLP 的能力"""
 
     def __init__(
         self,
@@ -328,27 +267,15 @@ class CompositeDesensitizer(BaseDesensitizer):
         entity_types: list[EntityType] | None = None,
         mode: str = "fast",
     ) -> None:
-        """
-        初始化组合脱敏器
-
-        Args:
-            strategy: 脱敏策略
-            entity_types: 要识别的实体类型列表，None 表示识别所有类型
-            mode: NLP NER 模式
-        """
         super().__init__(strategy, entity_types)
         self._regex_desensitizer = RegexDesensitizer(strategy, entity_types)
         self._paddle_desensitizer = NLPDesensitizer(strategy, entity_types, mode=mode)
 
     def recognize_entities(self, text: str) -> list[Entity]:
         """组合多种方式识别实体"""
-        # 正则匹配结构化数据
         regex_entities = self._regex_desensitizer.recognize_entities(text)
-
-        # NLP 识别非结构化数据
         paddle_entities = self._paddle_desensitizer.recognize_entities(text)
 
-        # 合并实体，去重（避免同一位置重复识别）
         all_entities = regex_entities + paddle_entities
         unique_entities: list[Entity] = []
 
@@ -363,11 +290,10 @@ class CompositeDesensitizer(BaseDesensitizer):
 
 
 def demo_paddle() -> None:
-    """NLP 脱敏示例"""
+    """PaddleNLP 脱敏示例"""
     console = Console()
-    console.print("\n[bold blue]===== NLP 数据脱敏 Demo =====[/bold blue]\n")
+    console.print("\n[bold blue]===== PaddleNLP 数据脱敏 Demo =====[/bold blue]\n")
 
-    # 测试文本
     test_texts = [
         "李白是唐朝伟大的诗人，他的手机号是13812345678，邮箱是libai@tang.com",
         "2024年1月，张三在北京市朝阳区购买了一套房产，银行卡号为6222021234567890123",
@@ -376,16 +302,13 @@ def demo_paddle() -> None:
 
     try:
         desensitizer = CompositeDesensitizer(strategy=MaskStrategy.PARTIAL)
-
         for text in test_texts:
             console.print(f"[dim]处理文本:[/dim] {text}")
             result = desensitizer.desensitize(text)
             desensitizer.display_result(result)
             console.print()
-
-    except ImportError as e:
+    except (ImportError, RuntimeError) as e:
         console.print(f"[red]错误: {e}[/red]")
-        console.print("[yellow]提示: 请先安装 paddlepaddle 和 NLP[/yellow]")
 
 
 def demo_regex() -> None:
@@ -413,14 +336,8 @@ def main() -> None:
     console.print("[bold]数据脱敏工具 Demo[/bold]")
     console.print("=" * 50)
 
-    # 运行正则脱敏示例（无依赖）
     demo_regex()
-
-    # 运行 NLP 示例
-    try:
-        demo_paddle()
-    except Exception as e:  # noqa: BLE001
-        console.print(f"[yellow]NLP Demo 跳过: {e}[/yellow]")
+    demo_paddle()
 
 
 if __name__ == "__main__":
