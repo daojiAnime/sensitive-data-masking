@@ -58,6 +58,13 @@ download_model() {
         python:3.10-slim \
         bash -c "
             set -e
+
+            # 检查模型是否已存在
+            if [ -f /app/models/taskflow/lac/static/inference.pdmodel ]; then
+                echo '✓ 模型已存在，跳过下载'
+                exit 0
+            fi
+
             apt-get update -qq && apt-get install -qq -y --no-install-recommends cmake build-essential > /dev/null 2>&1
             pip install --no-cache-dir -q 'setuptools>=75.0.0' paddlepaddle 'aistudio_sdk==0.2.1' 'paddlenlp==2.8.1'
 
