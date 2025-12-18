@@ -16,6 +16,7 @@ dependencies = [
 paddle = [
     "paddlepaddle>=2.6.0",
     "paddlenlp>=2.8.0",
+    "aistudio-sdk==0.2.1",  # 固定版本，0.3.x 与 paddlenlp 不兼容
 ]
 
 dev = [
