@@ -51,8 +51,6 @@ download_model() {
     echo -e "${YELLOW}▸ 下载 ${ner_mode} 模式模型...${NC}"
 
     docker run --rm \
-        --memory=4g \
-        --memory-swap=8g \
         -v "${MODEL_DIR}:/app/models" \
         -e PPNLP_HOME=/app/models \
         python:3.10-slim \
@@ -73,22 +71,40 @@ download_model() {
 
             python -c \"
 import os
-import subprocess
 os.environ['PPNLP_HOME'] = '/app/models'
 
 print('PPNLP_HOME:', os.environ['PPNLP_HOME'])
-print('初始化 NER (${ner_mode})...')
+print('下载模型文件...')
 
+# 只下载，不加载推理
+from paddlenlp.taskflow.lexical_analysis import LacTask
+task = LacTask(task='ner', model='lac', mode='${ner_mode}', lazy_load=True)
+
+# 强制同步
+import subprocess
+subprocess.run(['sync'])
+
+# 检查文件
+model_path = '/app/models/taskflow/lac/static/inference.pdmodel'
+if os.path.exists(model_path):
+    size = os.path.getsize(model_path)
+    print(f'✓ 模型文件已创建: {size} bytes')
+else:
+    print('✗ 模型文件不存在!')
+    # 列出目录内容
+    static_dir = '/app/models/taskflow/lac/static'
+    if os.path.exists(static_dir):
+        print(f'static 目录内容: {os.listdir(static_dir)}')
+    else:
+        print('static 目录不存在')
+    exit(1)
+
+print('测试推理...')
 from paddlenlp import Taskflow
 ner = Taskflow('ner', mode='${ner_mode}')
 print(ner('测试文本'))
 print('✓ ${ner_mode} 模型下载完成')
 \"
-            # 强制同步文件系统
-            sync
-
-            echo '验证模型文件:'
-            ls -la /app/models/taskflow/lac/static/ 2>/dev/null || echo '模型目录不存在!'
         "
 }
 
