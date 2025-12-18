@@ -57,9 +57,33 @@ download_model() {
         bash -c "
             set -e
 
+            # 创建 config.json 的函数 (修复 PaddleNLP 2.8.x 兼容性问题)
+            create_lac_config() {
+                python3 -c \"
+import json
+import os
+config_path = '/app/models/taskflow/lac/config.json'
+os.makedirs(os.path.dirname(config_path), exist_ok=True)
+if not os.path.exists(config_path):
+    lac_config = {
+        'model_type': 'lac',
+        'emb_dim': 128,
+        'hidden_size': 128,
+        'vocab_size': 668845
+    }
+    with open(config_path, 'w', encoding='utf-8') as f:
+        json.dump(lac_config, f, indent=2, ensure_ascii=False)
+    print('✓ config.json 已创建')
+else:
+    print('✓ config.json 已存在')
+\"
+            }
+
             # 检查模型是否已存在
             if [ -f /app/models/taskflow/lac/static/inference.pdmodel ]; then
                 echo '✓ 模型已存在，跳过下载'
+                # 确保 config.json 存在
+                create_lac_config
                 exit 0
             fi
 

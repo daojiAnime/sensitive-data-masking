@@ -27,6 +27,10 @@ dev = [
 
 [tool.uv]
 package = false
+# macOS ARM 上排除只有 Linux x86_64 wheel 的包
+override-dependencies = [
+    "tool-helpers ; sys_platform != 'darwin'",
+]
 
 
 [tool.mypy]

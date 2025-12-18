@@ -12,6 +12,9 @@ resolution-markers = [
     "python_full_version < '3.11' and sys_platform != 'win32'",
 ]
 
+[manifest]
+overrides = [{ name = "tool-helpers", marker = "sys_platform != 'darwin'" }]
+
 [[package]]
 name = "aiofiles"
 version = "24.1.0"
@@ -2471,7 +2474,7 @@ dependencies = [
     { name = "safetensors" },
     { name = "sentencepiece" },
     { name = "seqeval" },
-    { name = "tool-helpers" },
+    { name = "tool-helpers", marker = "sys_platform != 'darwin'" },
     { name = "tqdm" },
     { name = "typer" },
     { name = "uvicorn" },

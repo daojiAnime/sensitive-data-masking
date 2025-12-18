@@ -106,6 +106,11 @@ def download_ner_model(mode: str = "fast") -> bool:
         # 导入 PaddleNLP
         from paddlenlp import Taskflow
 
+        # 预先创建 LAC config.json (修复 PaddleNLP 2.8.x 兼容性问题)
+        # 必须在 Taskflow 加载之前创建，否则会报 KeyError: 'emb_dim'
+        model_dir = Path(os.environ.get("PPNLP_HOME", Path.home() / ".paddlenlp"))
+        _create_lac_config(model_dir)
+
         # 初始化 Taskflow 会自动下载模型
         if console:
             with Progress(
@@ -118,10 +123,6 @@ def download_ner_model(mode: str = "fast") -> bool:
         else:
             print("  正在下载模型...")
             ner = Taskflow("ner", mode=mode)
-
-        # 创建 LAC config.json (修复 PaddleNLP 2.8.x 兼容性问题)
-        model_dir = Path(os.environ.get("PPNLP_HOME", Path.home() / ".paddlenlp"))
-        _create_lac_config(model_dir)
 
         # 测试模型
         test_result = ner("测试文本")
