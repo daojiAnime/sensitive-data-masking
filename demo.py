@@ -17,16 +17,37 @@
 
 from __future__ import annotations
 
+import hashlib
 import os
 import re
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from rich.console import Console
 from rich.table import Table
+
+# 可选依赖：paddlenlp（延迟导入以支持仅使用正则脱敏的场景）
+if TYPE_CHECKING:
+    from paddlenlp import Taskflow as TaskflowType
+
+_taskflow_cls: type[TaskflowType] | None = None
+
+
+def _get_taskflow() -> type[TaskflowType]:
+    """获取 Taskflow 类，延迟导入 paddlenlp"""
+    global _taskflow_cls  # noqa: PLW0603
+    if _taskflow_cls is None:
+        try:
+            from paddlenlp import Taskflow
+
+            _taskflow_cls = Taskflow
+        except ImportError as e:
+            msg = "请先安装 paddlepaddle 和 paddlenlp: pip install paddlepaddle paddlenlp"
+            raise ImportError(msg) from e
+    return _taskflow_cls
 
 # =========================
 # 配置
@@ -50,46 +71,46 @@ _setup_model_dir()
 class EntityType(Enum):
     """实体类型枚举"""
 
-    PERSON = "人名"  # 人名
-    LOCATION = "地名"  # 地名
-    ORGANIZATION = "组织机构"  # 组织机构名
-    TIME = "时间"  # 时间
-    PHONE = "电话"  # 电话号码
-    EMAIL = "邮箱"  # 电子邮箱
-    ID_CARD = "身份证"  # 身份证号
-    BANK_CARD = "银行卡"  # 银行卡号
-    ADDRESS = "地址"  # 详细地址
-    MONEY = "金额"  # 金额
-    OTHER = "其他"  # 其他敏感信息
+    PERSON = "人名"
+    LOCATION = "地名"
+    ORGANIZATION = "组织机构"
+    TIME = "时间"
+    PHONE = "电话"
+    EMAIL = "邮箱"
+    ID_CARD = "身份证"
+    BANK_CARD = "银行卡"
+    ADDRESS = "地址"
+    MONEY = "金额"
+    OTHER = "其他"
 
 
 class MaskStrategy(Enum):
     """脱敏策略枚举"""
 
-    FULL = "full"  # 完全脱敏，替换为 ***
-    PARTIAL = "partial"  # 部分脱敏，保留首尾字符
-    HASH = "hash"  # 哈希脱敏，替换为哈希值
-    PLACEHOLDER = "placeholder"  # 占位符脱敏，替换为类型标签
+    FULL = "full"
+    PARTIAL = "partial"
+    HASH = "hash"
+    PLACEHOLDER = "placeholder"
 
 
 @dataclass
 class Entity:
     """识别出的实体"""
 
-    text: str  # 实体文本
-    entity_type: EntityType  # 实体类型
-    start: int  # 起始位置
-    end: int  # 结束位置
-    confidence: float = 1.0  # 置信度
+    text: str
+    entity_type: EntityType
+    start: int
+    end: int
+    confidence: float = 1.0
 
 
 @dataclass
 class MaskResult:
     """脱敏结果"""
 
-    original_text: str  # 原始文本
-    masked_text: str  # 脱敏后文本
-    entities: list[Entity] = field(default_factory=list)  # 识别出的实体列表
+    original_text: str
+    masked_text: str
+    entities: list[Entity] = field(default_factory=list)
 
 
 class BaseDesensitizer(ABC):
@@ -108,7 +129,7 @@ class BaseDesensitizer(ABC):
             entity_types: 要识别的实体类型列表，None 表示识别所有类型
         """
         self.strategy = strategy
-        self.entity_types = entity_types  # None 表示识别所有类型
+        self.entity_types = entity_types
         self._console = Console()
 
     @abstractmethod
@@ -129,8 +150,6 @@ class BaseDesensitizer(ABC):
             return entity_text[0] + "*" * (len(entity_text) - 2) + entity_text[-1]
 
         if self.strategy == MaskStrategy.HASH:
-            import hashlib
-
             hash_val = hashlib.md5(entity_text.encode()).hexdigest()[:8]  # noqa: S324
             return f"[{hash_val}]"
 
@@ -142,7 +161,6 @@ class BaseDesensitizer(ABC):
     def desensitize(self, text: str) -> MaskResult:
         """对文本进行脱敏处理"""
         entities = self.recognize_entities(text)
-        # 按位置倒序排列，避免替换时位置偏移
         entities_sorted = sorted(entities, key=lambda e: e.start, reverse=True)
 
         masked_text = text
@@ -173,12 +191,11 @@ class BaseDesensitizer(ABC):
 class RegexDesensitizer(BaseDesensitizer):
     """基于正则表达式的脱敏器 - 用于识别结构化敏感信息"""
 
-    # 预定义正则模式
     PATTERNS: dict[EntityType, str] = {
-        EntityType.PHONE: r"1[3-9]\d{9}",  # 中国大陆手机号
+        EntityType.PHONE: r"1[3-9]\d{9}",
         EntityType.EMAIL: r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}",
-        EntityType.ID_CARD: r"\d{17}[\dXx]",  # 18位身份证
-        EntityType.BANK_CARD: r"\d{16,19}",  # 银行卡号
+        EntityType.ID_CARD: r"\d{17}[\dXx]",
+        EntityType.BANK_CARD: r"\d{16,19}",
     }
 
     def recognize_entities(self, text: str) -> list[Entity]:
@@ -250,13 +267,8 @@ class NLPDesensitizer(BaseDesensitizer):
     def _init_ner(self) -> None:
         """延迟初始化 NER 模型"""
         if self._ner is None:
-            try:
-                from paddlenlp import Taskflow
-
-                self._ner = Taskflow("ner", mode=self._mode)
-            except ImportError as e:
-                msg = "请先安装 paddlepaddle 和 paddlenlp: pip install paddlepaddle paddlenlp"
-                raise ImportError(msg) from e
+            taskflow_cls = _get_taskflow()
+            self._ner = taskflow_cls("ner", mode=self._mode)
 
     def recognize_entities(self, text: str) -> list[Entity]:
         """使用 NLP Taskflow 识别命名实体"""
