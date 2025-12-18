@@ -19,11 +19,16 @@ uv sync --group paddle
 
 # 运行应用
 python app.py
+
+# Mac ARM64 用户请使用 fast 模式 (accurate 模式会崩溃)
+NER_MODE=fast python app.py
 ```
 
 访问 http://localhost:7860
 
 ### Docker 部署
+
+> ⚠️ **注意**: Docker 镜像使用 x86_64 架构。Mac ARM64 用户通过仿真运行会很慢，建议使用本地运行方式。
 
 ```bash
 # 1. 配置环境变量
