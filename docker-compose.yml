@@ -3,10 +3,11 @@
 
 services:
   data-masking:
-    # image: ghcr.io/daojianime/sensitive-data-masking:latest
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: ghcr.io/daojianime/sensitive-data-masking:latest
+    # 如需本地构建，取消注释以下两行：
+    # build:
+    #   context: .
+    #   dockerfile: Dockerfile
     container_name: data-masking-web
     ports:
       - "${GRADIO_PORT:-7860}:7860"
