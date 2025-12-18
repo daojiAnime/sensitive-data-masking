@@ -30,6 +30,21 @@ NER_MODE=fast python app.py
 
 > ⚠️ **注意**: Docker 镜像使用 x86_64 架构。Mac ARM64 用户通过仿真运行会很慢，建议使用本地运行方式。
 
+#### 使用预构建镜像（推荐）
+
+```bash
+# 拉取镜像
+docker pull ghcr.io/daojianime/sensitive-data-masking:latest
+
+# 运行
+docker run -d -p 7860:7860 \
+  -v ./models:/app/models \
+  -e NER_MODE=fast \
+  ghcr.io/daojianime/sensitive-data-masking:latest
+```
+
+#### 本地构建
+
 ```bash
 # 1. 配置环境变量
 cp .env.example .env
